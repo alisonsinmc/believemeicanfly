@@ -31,6 +31,7 @@
             position: absolute;
             top: 0;
             left: 0;
+            transform: scaleX(-1); /* Mirrors the whole canvas naturally */
         }
 
         .code-overlay {
@@ -85,7 +86,7 @@
     <canvas id="canvas"></canvas>
 
     <div class="code-overlay">
-        <div><span class="keyword">let</span> <span class="variable">lyricSequence</span> = [<span class="string">"believe"</span>, <span class="string">"me"</span>, <span class="string">"i"</span>, <span class="string">"can"</span>, <span class="string">"fly,"</span>, <span class="string">"PAUSE"</span>, <span class="string">"im"</span>, <span class="string">"singing..."</span>];</div>
+        <div><span class="keyword">let</span> <span class="variable">lyricSequence</span> = [<span class="string">"believe"</span>, <span class="string">"me"</span>, <span class="string">"i"</span>, <span class="string">"can"</span>, <span class="string">"fly,"</span>, <span class="string">"PAUSE (0.7s)"</span>, <span class="string">"im"</span>, <span class="string">"singing..."</span>];</div>
         <div><span class="keyword">function</span> <span class="variable">emitWord</span>(hand) {</div>
         <div>&nbsp;&nbsp;particles.push(<span class="keyword">new</span> WordParticle(hand.x, hand.y));</div>
         <div>}</div>
@@ -114,7 +115,7 @@
         let stars = [];
         let lastSpawnTime = 0;
         let isPausedForTimer = false;
-        let gestureStarted = false; // Tracks whether your hand gesture has begun
+        let gestureStarted = false;
 
         const asciiChars = "@#&$%*+!?., ";
 
@@ -189,7 +190,6 @@
 
         hands.onResults((results) => {
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                // Trigger that hand gesture has started
                 gestureStarted = true;
 
                 if (!audio.paused && audio.duration && audio.currentTime < audio.duration / 2) {
@@ -198,7 +198,8 @@
                     const landmarks = results.multiHandLandmarks[0];
                     const indexFingerTip = landmarks[8];
 
-                    const handX = indexFingerTip.x * canvas.width;
+                    // Un-flip X coordinate so it aligns precisely with the mirrored canvas view
+                    const handX = (1 - indexFingerTip.x) * canvas.width;
                     const handY = indexFingerTip.y * canvas.height;
 
                     const now = Date.now();
@@ -208,9 +209,10 @@
                         if (currentItem === "PAUSE") {
                             isPausedForTimer = true;
                             seqIndex++;
+                            // Reduced pause duration to 0.7 seconds (700ms)
                             setTimeout(() => {
                                 isPausedForTimer = false;
-                            }, 1000);
+                            }, 700);
                         } else {
                             wordParticles.push(new WordParticle(handX, handY, currentItem));
                             seqIndex = (seqIndex + 1) % lyricSequence.length;
@@ -232,12 +234,12 @@
             });
 
             if (videoElement.readyState >= 2) {
-                // 2. Clear full-color video feed underneath
+                // 2. Full-color video feed underneath
                 ctx.save();
                 ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
                 ctx.restore();
 
-                // 3. Lightweight ASCII overlay strictly mapped onto hair/face/body contours
+                // 3. Lightweight ASCII overlay on face/body contours
                 procCtx.drawImage(videoElement, 0, 0, procCanvas.width, procCanvas.height);
                 const imgData = procCtx.getImageData(0, 0, procCanvas.width, procCanvas.height).data;
 
@@ -276,7 +278,7 @@
                 ctx.restore();
             }
             
-            // 4. Only draw lyric word particles once the hand gesture has started
+            // 4. Draw lyric word particles once gesture starts
             if (gestureStarted) {
                 wordParticles.forEach(p => p.update());
                 wordParticles = wordParticles.filter(p => p.alpha > 0);
