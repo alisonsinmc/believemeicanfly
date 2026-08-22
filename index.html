@@ -102,9 +102,9 @@
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            // Increased resolution grid for sharper detail
-            procCanvas.width = 160;
-            procCanvas.height = 95;
+            // Lower grid resolution for a much more sparse, clean look
+            procCanvas.width = 65;
+            procCanvas.height = 38;
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
@@ -116,8 +116,8 @@
         let lastSpawnTime = 0;
         let isPausedForTimer = false;
 
-        // Lighter character set to reduce clutter and increase clarity
-        const asciiChars = "@#*+=-:. ";
+        // Very sparse character set focusing mostly on dots and subtle outlines
+        const asciiChars = ".*+ ";
 
         class Star {
             constructor() {
@@ -231,8 +231,8 @@
                 const imgData = procCtx.getImageData(0, 0, procCanvas.width, procCanvas.height).data;
 
                 ctx.save();
-                ctx.font = '9px monospace'; // Smaller font size for a cleaner look
-                ctx.fillStyle = 'rgba(180, 180, 220, 0.45)'; // Brighter and cleaner tone
+                ctx.font = '12px monospace';
+                ctx.fillStyle = 'rgba(160, 160, 220, 0.3)';
 
                 const cellWidth = canvas.width / procCanvas.width;
                 const cellHeight = canvas.height / procCanvas.height;
@@ -245,13 +245,17 @@
                         const b = imgData[offset + 2];
 
                         const avg = (r + g + b) / 3;
-                        const charIndex = Math.floor((avg / 255) * (asciiChars.length - 1));
-                        const char = asciiChars[charIndex];
+                        
+                        // High threshold: only render ASCII for brighter areas, cutting out background clutter
+                        if (avg > 90) {
+                            const charIndex = Math.floor(((avg - 90) / 165) * (asciiChars.length - 1));
+                            const char = asciiChars[Math.max(0, charIndex)];
 
-                        if (char !== ' ') {
-                            const drawX = (procCanvas.width - 1 - x) * cellWidth;
-                            const drawY = y * cellHeight;
-                            ctx.fillText(char, drawX, drawY);
+                            if (char && char !== ' ') {
+                                const drawX = (procCanvas.width - 1 - x) * cellWidth;
+                                const drawY = y * cellHeight;
+                                ctx.fillText(char, drawX, drawY);
+                            }
                         }
                     }
                 }
