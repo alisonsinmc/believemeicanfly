@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lyric Code Fall Animation</title>
+    <title>Believe Me I Can Fly</title>
     <style>
         body, html {
             margin: 0;
@@ -37,9 +37,37 @@
         .code-overlay span.keyword { color: #c586c0; }
         .code-overlay span.variable { color: #9cdcfe; }
         .code-overlay span.string { color: #ce9178; }
+
+        #play-prompt {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: monospace;
+            z-index: 1000;
+            border: 1px solid #444;
+            transition: background 0.2s;
+        }
+
+        #play-prompt:hover {
+            background: rgba(50, 50, 50, 0.9);
+        }
     </style>
 </head>
 <body>
+
+    <!-- Audio Element -->
+    <audio id="background-music" loop>
+        <source src="believemeicanfly.mp3" type="audio/mpeg">
+        Your browser does not support the audio element.
+    </audio>
+
+    <!-- Click Prompt for Audio -->
+    <div id="play-prompt">🔊 Click to Play Music</div>
 
     <canvas id="canvas"></canvas>
 
@@ -61,7 +89,6 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // Using your chosen lyric string for the falling characters
         const lyricString = "Believe me I can fly, I'm singing in the sky";
         const characters = lyricString.split('');
 
@@ -82,7 +109,6 @@
                 this.x += this.vx;
                 this.rotation += this.vRotation;
 
-                // Reset to top if it falls off screen
                 if (this.y > canvas.height + 50) {
                     this.y = -50;
                     this.x = Math.random() * canvas.width;
@@ -100,20 +126,19 @@
             }
         }
 
-        // Create a pool of particles using the characters from your lyrics
         const particles = [];
         for (let i = 0; i < 75; i++) {
             const char = characters[Math.floor(Math.random() * characters.length)];
             particles.push(new Particle(
-                char,
-                Math.random() * canvas.width,
+                char, 
+                Math.random() * canvas.width, 
                 Math.random() * canvas.height
             ));
         }
 
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
+            
             particles.forEach(p => {
                 p.update();
                 p.draw();
@@ -123,6 +148,17 @@
         }
 
         animate();
+
+        // Audio trigger logic
+        const audio = document.getElementById('background-music');
+        const prompt = document.getElementById('play-prompt');
+
+        prompt.addEventListener('click', () => {
+            if (audio.paused) {
+                audio.play();
+                prompt.style.display = 'none';
+            }
+        });
     </script>
 </body>
 </html>
