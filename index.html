@@ -188,28 +188,29 @@
                 this.word = word;
                 this.x = x;
                 this.y = y;
-                this.vx = (Math.random() - 0.5) * 1.5;
-                this.vy = (Math.random() - 0.5) * 1.5 - 0.3;
+                this.vx = (Math.random() - 0.5) * 1.0;
+                this.vy = 0.5; // Initial downward momentum
+                this.gravity = 0.12; // Gravity pulling the words down after they appear
                 this.alpha = 1.0;
                 this.decay = 0.012;
-                this.size = 32; // Slightly larger size to showcase the custom script font beautifully
+                this.size = 48;
             }
 
             update() {
+                this.vy += this.gravity; // Accelerate downward
                 this.x += this.vx;
-                this.y += this.vy;
+                this.y += this.vy;       // Apply fall movement
                 this.alpha -= this.decay;
             }
 
             draw() {
                 ctx.save();
                 ctx.scale(-1, 1);
-                // Applied Lemon Jelly script font with fallback to cursive/sans-serif
                 ctx.font = `bold ${this.size}px 'Lemon Jelly', 'Brush Script MT', cursive, sans-serif`;
                 ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, this.alpha)})`;
                 ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-                ctx.shadowBlur = 12;
-                ctx.lineWidth = 4;
+                ctx.shadowBlur = 14;
+                ctx.lineWidth = 5;
                 ctx.strokeText(this.word, -this.x, this.y);
                 ctx.fillText(this.word, -this.x, this.y);
                 ctx.restore();
@@ -247,10 +248,9 @@
                         if (currentItem === "PAUSE") {
                             isPausedForTimer = true;
                             seqIndex++;
-                            // Exactly 2.0 seconds pause (2000ms)
                             setTimeout(() => {
                                 isPausedForTimer = false;
-                            }, 2000);
+                            }, 2000); // 2.0 seconds pause
                         } else {
                             wordParticles.push(new WordParticle(handX, handY, currentItem));
                             seqIndex++;
