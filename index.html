@@ -20,7 +20,6 @@
             font-family: 'Courier New', Courier, monospace;
         }
 
-        /* Hidden video element used to capture webcam frames */
         #webcam {
             display: none;
         }
@@ -32,7 +31,7 @@
             position: absolute;
             top: 0;
             left: 0;
-            transform: scaleX(-1); /* Mirror effect for natural webcam movement */
+            transform: scaleX(-1); /* Mirror effect */
         }
 
         .code-overlay {
@@ -75,7 +74,6 @@
 </head>
 <body>
 
-    <!-- Audio Element -->
     <audio id="background-music" loop>
         <source src="believemeicanfly.mp3" type="audio/mpeg">
         Your browser does not support the audio element.
@@ -83,16 +81,13 @@
 
     <div id="play-prompt">🔊 Click to Play Music & Enable Camera</div>
 
-    <!-- Hidden Video Feed -->
     <video id="webcam" playsinline></video>
-    
-    <!-- Canvas for Webcam + Falling Lyrics -->
     <canvas id="canvas"></canvas>
 
     <div class="code-overlay">
         <div><span class="keyword">let</span> <span class="variable">lyrics</span> = <span class="string">"Believe me I can fly, I'm singing in the sky"</span>;</div>
-        <div><span class="keyword">function</span> <span class="variable">fall</span>() {</div>
-        <div>&nbsp;&nbsp;particles.forEach(p => p.update());</div>
+        <div><span class="keyword">function</span> <span class="variable">emit</span>(hand) {</div>
+        <div>&nbsp;&nbsp;particles.push(<span class="keyword">new</span> Particle(hand.x, hand.y));</div>
         <div>}</div>
     </div>
 
@@ -110,52 +105,30 @@
 
         const lyricString = "Believe me I can fly, I'm singing in the sky";
         const characters = lyricString.split('');
-
-        // Track hand coordinates
-        let handPositions = [];
+        let charIndex = 0;
+        let particles = [];
+        let lastSpawnTime = 0;
 
         class Particle {
-            constructor(char, x, y) {
+            constructor(x, y, char) {
                 this.char = char;
                 this.x = x;
                 this.y = y;
-                this.vx = (Math.random() - 0.5) * 2;
-                this.vy = Math.random() * 2 + 1;
+                // Gentle outward burst velocity from the hand
+                this.vx = (Math.random() - 0.5) * 3;
+                this.vy = (Math.random() - 0.5) * 3 - 1; 
                 this.rotation = Math.random() * Math.PI * 2;
-                this.vRotation = (Math.random() - 0.5) * 0.05;
-                this.size = Math.floor(Math.random() * 8) + 16;
+                this.vRotation = (Math.random() - 0.5) * 0.08;
+                this.size = Math.floor(Math.random() * 6) + 16;
+                this.alpha = 1.0;
+                this.decay = 0.015; // Fade out speed
             }
 
             update() {
-                // Normal downward movement & drift
-                this.y += this.vy;
                 this.x += this.vx;
+                this.y += this.vy;
                 this.rotation += this.vRotation;
-
-                // React to hand positions (push particles away)
-                handPositions.forEach(hand => {
-                    const dx = this.x - hand.x;
-                    const dy = this.y - hand.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < 80) { // Interaction radius
-                        const angle = Math.atan2(dy, dx);
-                        const force = (80 - dist) / 5;
-                        this.vx += Math.cos(angle) * force * 0.2;
-                        this.vy += Math.sin(angle) * force * 0.2;
-                    }
-                });
-
-                // Dampen velocity to keep motion smooth
-                this.vx *= 0.95;
-                this.vy = Math.max(0.5, this.vy * 0.95 + 0.1);
-
-                // Reset to top if it falls off screen
-                if (this.y > canvas.height + 50) {
-                    this.y = -50;
-                    this.x = Math.random() * canvas.width;
-                }
-                if (this.x < 0) this.x = canvas.width;
-                if (this.x > canvas.width) this.x = 0;
+                this.alpha -= this.decay;
             }
 
             draw() {
@@ -163,19 +136,10 @@
                 ctx.translate(this.x, this.y);
                 ctx.rotate(this.rotation);
                 ctx.font = `${this.size}px 'Courier New', monospace`;
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, this.alpha)})`;
                 ctx.fillText(this.char, 0, 0);
                 ctx.restore();
             }
-        }
-
-        const particles = [];
-        for (let i = 0; i < 80; i++) {
-            particles.push(new Particle(
-                characters[Math.floor(Math.random() * characters.length)], 
-                Math.random() * canvas.width, 
-                Math.random() * canvas.height
-            ));
         }
 
         // Setup MediaPipe Hands
@@ -184,43 +148,48 @@
         });
 
         hands.setOptions({
-            maxNumHands: 2,
+            maxNumHands: 1,
             modelComplexity: 1,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
         });
 
         hands.onResults((results) => {
-            handPositions = [];
-            if (results.multiHandLandmarks) {
-                for (const landmarks of results.multiHandLandmarks) {
-                    // Grab index finger tip (landmark 8) or palm center for interaction
-                    const landmark = landmarks[8]; 
-                    handPositions.push({
-                        x: landmark.x * canvas.width,
-                        y: landmark.y * canvas.height
-                    });
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                const indexFingerTip = landmarks[8]; // Index finger tip landmark
+
+                const handX = indexFingerTip.x * canvas.width;
+                const handY = indexFingerTip.y * canvas.height;
+
+                const now = Date.now();
+                // Throttle emission so characters flow out sequentially instead of all at once
+                if (now - lastSpawnTime > 70) { 
+                    const nextChar = characters[charIndex];
+                    particles.push(new Particle(handX, handY, nextChar));
+                    
+                    // Cycle through the lyric string sequentially
+                    charIndex = (charIndex + 1) % characters.length;
+                    lastSpawnTime = now;
                 }
             }
         });
 
-        // Animation Loop
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw webcam feed in the background
+            // Draw webcam background
             if (videoElement.readyState >= 2) {
                 ctx.save();
-                ctx.globalAlpha = 0.4; // Faint webcam backdrop so text pops
+                ctx.globalAlpha = 0.5;
                 ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
                 ctx.restore();
             }
             
-            // Update and draw lyric particles
-            particles.forEach(p => {
-                p.update();
-                p.draw();
-            });
+            // Update and draw particles, removing faded ones
+            particles.forEach(p => p.update());
+            particles = particles.filter(p => p.alpha > 0);
+            particles.forEach(p => p.draw());
 
             requestAnimationFrame(animate);
         }
@@ -235,7 +204,6 @@
             try {
                 audio.play();
                 
-                // Start Webcam Camera Feed
                 const camera = new Camera(videoElement, {
                     onFrame: async () => {
                         await hands.send({ image: videoElement });
