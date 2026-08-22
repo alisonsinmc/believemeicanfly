@@ -113,6 +113,7 @@
         let seqIndex = 0;
         let wordParticles = [];
         let stars = [];
+        let clouds = [];
         let lastSpawnTime = 0;
         let isPausedForTimer = false;
         let gestureStarted = false;
@@ -120,6 +121,7 @@
 
         const asciiChars = "@#&$%*+!?., ";
 
+        // Falling Stars Class
         class Star {
             constructor() {
                 this.x = Math.random() * canvas.width;
@@ -143,8 +145,34 @@
             }
         }
 
+        // Drifting ASCII Clouds Class
+        class ASCIICloud {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * (canvas.height * 0.6);
+                this.vx = (Math.random() - 0.5) * 0.4 - 0.2; // Slow horizontal drift
+                this.text = "(~~~)";
+                this.alpha = Math.random() * 0.25 + 0.1;
+            }
+            update() {
+                this.x += this.vx;
+                if (this.x < -100) this.x = canvas.width + 100;
+                if (this.x > canvas.width + 100) this.x = -100;
+            }
+            draw() {
+                ctx.save();
+                ctx.font = '16px monospace';
+                ctx.fillStyle = `rgba(200, 200, 230, ${this.alpha})`;
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.restore();
+            }
+        }
+
         for (let i = 0; i < 80; i++) {
             stars.push(new Star());
+        }
+        for (let i = 0; i < 12; i++) {
+            clouds.push(new ASCIICloud());
         }
 
         class WordParticle {
@@ -204,7 +232,6 @@
                     const handY = indexFingerTip.y * canvas.height;
 
                     const now = Date.now();
-                    // Adjusted interval to 250ms for a balanced, natural word flow speed
                     if (now - lastSpawnTime > 250) { 
                         const currentItem = lyricSequence[seqIndex];
 
@@ -236,9 +263,14 @@
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            // 1. Draw stars and ASCII clouds background
             stars.forEach(star => {
                 star.update();
                 star.draw();
+            });
+            clouds.forEach(cloud => {
+                cloud.update();
+                cloud.draw();
             });
 
             if (videoElement.readyState >= 2) {
