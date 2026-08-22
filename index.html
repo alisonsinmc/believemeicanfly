@@ -147,10 +147,11 @@
         class ASCIICloud {
             constructor() {
                 this.x = Math.random() * canvas.width;
-                this.y = Math.random() * (canvas.height * 0.6);
+                // Allow clouds to spawn across the *entire* height of the frame so they mix with your face/body
+                this.y = Math.random() * canvas.height;
                 this.vx = (Math.random() - 0.5) * 0.4 - 0.2;
                 this.text = "(~~~)";
-                this.alpha = Math.random() * 0.3 + 0.15;
+                this.alpha = Math.random() * 0.35 + 0.15;
             }
             update() {
                 this.x += this.vx;
@@ -160,10 +161,9 @@
             draw() {
                 ctx.save();
                 ctx.font = '16px monospace';
-                // Light blue color styling for the ASCII clouds
                 ctx.fillStyle = `rgba(135, 206, 250, ${this.alpha})`;
-                ctx.shadowColor = 'rgba(135, 206, 250, 0.5)';
-                ctx.shadowBlur = 8;
+                ctx.shadowColor = 'rgba(135, 206, 250, 0.6)';
+                ctx.shadowBlur = 10;
                 ctx.fillText(this.text, this.x, this.y);
                 ctx.restore();
             }
@@ -172,7 +172,7 @@
         for (let i = 0; i < 80; i++) {
             stars.push(new Star());
         }
-        for (let i = 0; i < 12; i++) {
+        for (let i = 0; i < 14; i++) {
             clouds.push(new ASCIICloud());
         }
 
@@ -264,21 +264,25 @@
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Draw stars and light-blue ASCII clouds in the background
+            // 1. Draw stars background
             stars.forEach(star => {
                 star.update();
                 star.draw();
             });
-            clouds.forEach(cloud => {
-                cloud.update();
-                cloud.draw();
-            });
 
             if (videoElement.readyState >= 2) {
+                // 2. Draw video feed
                 ctx.save();
                 ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
                 ctx.restore();
 
+                // 3. Draw light-blue ASCII clouds *on top* of the video frame so they intermix with your face/body
+                clouds.forEach(cloud => {
+                    cloud.update();
+                    cloud.draw();
+                });
+
+                // 4. Draw ASCII face/body contour overlay
                 procCtx.drawImage(videoElement, 0, 0, procCanvas.width, procCanvas.height);
                 const imgData = procCtx.getImageData(0, 0, procCanvas.width, procCanvas.height).data;
 
@@ -317,6 +321,7 @@
                 ctx.restore();
             }
             
+            // 5. Draw lyric word particles
             if (gestureStarted) {
                 wordParticles.forEach(p => p.update());
                 wordParticles = wordParticles.filter(p => p.alpha > 0);
