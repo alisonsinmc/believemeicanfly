@@ -204,8 +204,8 @@
                     const handY = indexFingerTip.y * canvas.height;
 
                     const now = Date.now();
-                    // Decreased interval to 150ms so words spit out much faster
-                    if (now - lastSpawnTime > 150) { 
+                    // Adjusted interval to 250ms for a balanced, natural word flow speed
+                    if (now - lastSpawnTime > 250) { 
                         const currentItem = lyricSequence[seqIndex];
 
                         if (currentItem === "PAUSE") {
