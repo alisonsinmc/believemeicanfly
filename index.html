@@ -20,7 +20,7 @@
             font-family: 'Courier New', Courier, monospace;
         }
 
-        #webcam, #processing-canvas {
+        #webcam {
             display: none;
         }
 
@@ -81,7 +81,6 @@
     <div id="play-prompt">🔊 Click to Play Music & Enable Camera</div>
 
     <video id="webcam" playsinline></video>
-    <canvas id="processing-canvas"></canvas>
     <canvas id="canvas"></canvas>
 
     <div class="code-overlay">
@@ -94,16 +93,12 @@
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        const procCanvas = document.getElementById('processing-canvas');
-        const procCtx = procCanvas.getContext('2d', { willReadFrequently: true });
         const videoElement = document.getElementById('webcam');
         const audio = document.getElementById('background-music');
 
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            procCanvas.width = 100;
-            procCanvas.height = 60;
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
@@ -115,8 +110,7 @@
         let lastSpawnTime = 0;
         let isPausedForTimer = false;
 
-        const asciiChars = "@#&$%*+!?., ";
-
+        // Background falling stars
         class Star {
             constructor() {
                 this.x = Math.random() * canvas.width;
@@ -144,16 +138,17 @@
             stars.push(new Star());
         }
 
+        // Crisp, high-contrast word particles that pop against the clean background
         class WordParticle {
             constructor(x, y, word) {
                 this.word = word;
                 this.x = x;
                 this.y = y;
-                this.vx = (Math.random() - 0.5) * 2;
-                this.vy = (Math.random() - 0.5) * 2 - 0.5;
+                this.vx = (Math.random() - 0.5) * 1.5;
+                this.vy = (Math.random() - 0.5) * 1.5 - 0.3;
                 this.alpha = 1.0;
-                this.decay = 0.015;
-                this.size = 22;
+                this.decay = 0.012;
+                this.size = 26;
             }
 
             update() {
@@ -166,8 +161,10 @@
                 ctx.save();
                 ctx.font = `bold ${this.size}px 'Courier New', monospace`;
                 ctx.fillStyle = `rgba(255, 255, 255, ${Math.max(0, this.alpha)})`;
-                ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-                ctx.shadowBlur = 10;
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+                ctx.shadowBlur = 12;
+                ctx.lineWidth = 4;
+                ctx.strokeText(this.word, this.x, this.y);
                 ctx.fillText(this.word, this.x, this.y);
                 ctx.restore();
             }
@@ -210,7 +207,7 @@
                             seqIndex = (seqIndex + 1) % lyricSequence.length;
                         }
                         
-                        lastSpawnTime = timeCheck = now;
+                        lastSpawnTime = now;
                     }
                 }
             }
@@ -225,54 +222,14 @@
                 star.draw();
             });
 
+            // 2. Draw clean full-color video feed (no laggy filters)
             if (videoElement.readyState >= 2) {
-                // 2. Draw clear full-color video underneath
                 ctx.save();
                 ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
                 ctx.restore();
-
-                // 3. Draw ASCII characters ONLY on the edges/contours of your body and hair
-                procCtx.drawImage(videoElement, 0, 0, procCanvas.width, procCanvas.height);
-                const imgData = procCtx.getImageData(0, 0, procCanvas.width, procCanvas.height).data;
-
-                ctx.save();
-                ctx.font = '11px monospace';
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.75)'; // Bright white ASCII overlay like the reference
-
-                const cellWidth = canvas.width / procCanvas.width;
-                const cellHeight = canvas.height / procCanvas.height;
-
-                for (let y = 1; y < procCanvas.height - 1; y++) {
-                    for (let x = 1; x < procCanvas.width - 1; x++) {
-                        const offset = (y * procCanvas.width + x) * 4;
-                        const r = imgData[offset];
-                        const g = imgData[offset + 1];
-                        const b = imgData[offset + 2];
-                        const brightness = (r + g + b) / 3;
-
-                        // Check contrast with neighboring pixels to find edges (hairline, clothing edges, shoulders)
-                        const rightOffset = (y * procCanvas.width + (x + 1)) * 4;
-                        const downOffset = ((y + 1) * procCanvas.width + x) * 4;
-                        const rightDiff = Math.abs(brightness - ((imgData[rightOffset] + imgData[rightOffset+1] + imgData[rightOffset+2]) / 3));
-                        const downDiff = Math.abs(brightness - ((imgData[downOffset] + imgData[downOffset+1] + imgData[downOffset+2]) / 3));
-                        
-                        // If it's an edge contour and not part of a plain background wall
-                        if ((rightDiff > 18 || downDiff > 18) && brightness < 200 && brightness > 25) {
-                            const charIndex = Math.floor((brightness / 255) * (asciiChars.length - 1));
-                            const char = asciiChars[charIndex];
-
-                            if (char && char !== ' ') {
-                                const drawX = x * cellWidth;
-                                const drawY = y * cellHeight;
-                                ctx.fillText(char, drawX, drawY);
-                            }
-                        }
-                    }
-                }
-                ctx.restore();
             }
             
-            // 4. Draw lyric word particles coming from your hand
+            // 3. Update and draw crisp lyric word particles
             wordParticles.forEach(p => p.update());
             wordParticles = wordParticles.filter(p => p.alpha > 0);
             wordParticles.forEach(p => p.draw());
