@@ -121,7 +121,6 @@
 
         const asciiChars = "@#&$%*+!?., ";
 
-        // Falling Stars Class
         class Star {
             constructor() {
                 this.x = Math.random() * canvas.width;
@@ -145,14 +144,13 @@
             }
         }
 
-        // Drifting ASCII Clouds Class
         class ASCIICloud {
             constructor() {
                 this.x = Math.random() * canvas.width;
                 this.y = Math.random() * (canvas.height * 0.6);
-                this.vx = (Math.random() - 0.5) * 0.4 - 0.2; // Slow horizontal drift
+                this.vx = (Math.random() - 0.5) * 0.4 - 0.2;
                 this.text = "(~~~)";
-                this.alpha = Math.random() * 0.25 + 0.1;
+                this.alpha = Math.random() * 0.3 + 0.15;
             }
             update() {
                 this.x += this.vx;
@@ -162,7 +160,10 @@
             draw() {
                 ctx.save();
                 ctx.font = '16px monospace';
-                ctx.fillStyle = `rgba(200, 200, 230, ${this.alpha})`;
+                // Light blue color styling for the ASCII clouds
+                ctx.fillStyle = `rgba(135, 206, 250, ${this.alpha})`;
+                ctx.shadowColor = 'rgba(135, 206, 250, 0.5)';
+                ctx.shadowBlur = 8;
                 ctx.fillText(this.text, this.x, this.y);
                 ctx.restore();
             }
@@ -263,7 +264,7 @@
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Draw stars and ASCII clouds background
+            // 1. Draw stars and light-blue ASCII clouds in the background
             stars.forEach(star => {
                 star.update();
                 star.draw();
