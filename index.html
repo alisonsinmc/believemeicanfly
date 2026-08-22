@@ -102,9 +102,8 @@
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            // Lower grid resolution for a much more sparse, clean look
-            procCanvas.width = 65;
-            procCanvas.height = 38;
+            procCanvas.width = 100;
+            procCanvas.height = 60;
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
@@ -116,8 +115,7 @@
         let lastSpawnTime = 0;
         let isPausedForTimer = false;
 
-        // Very sparse character set focusing mostly on dots and subtle outlines
-        const asciiChars = ".*+ ";
+        const asciiChars = "@#&$%*+!?., ";
 
         class Star {
             constructor() {
@@ -194,7 +192,7 @@
                     const landmarks = results.multiHandLandmarks[0];
                     const indexFingerTip = landmarks[8];
 
-                    const handX = (1 - indexFingerTip.x) * canvas.width;
+                    const handX = indexFingerTip.x * canvas.width;
                     const handY = indexFingerTip.y * canvas.height;
 
                     const now = Date.now();
@@ -212,7 +210,7 @@
                             seqIndex = (seqIndex + 1) % lyricSequence.length;
                         }
                         
-                        lastSpawnTime = now;
+                        lastSpawnTime = timeCheck = now;
                     }
                 }
             }
@@ -221,38 +219,50 @@
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            // 1. Draw falling stars background
             stars.forEach(star => {
                 star.update();
                 star.draw();
             });
 
             if (videoElement.readyState >= 2) {
+                // 2. Draw clear full-color video underneath
+                ctx.save();
+                ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+                ctx.restore();
+
+                // 3. Draw ASCII characters ONLY on the edges/contours of your body and hair
                 procCtx.drawImage(videoElement, 0, 0, procCanvas.width, procCanvas.height);
                 const imgData = procCtx.getImageData(0, 0, procCanvas.width, procCanvas.height).data;
 
                 ctx.save();
-                ctx.font = '12px monospace';
-                ctx.fillStyle = 'rgba(160, 160, 220, 0.3)';
+                ctx.font = '11px monospace';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.75)'; // Bright white ASCII overlay like the reference
 
                 const cellWidth = canvas.width / procCanvas.width;
                 const cellHeight = canvas.height / procCanvas.height;
 
-                for (let y = 0; y < procCanvas.height; y++) {
-                    for (let x = 0; x < procCanvas.width; x++) {
+                for (let y = 1; y < procCanvas.height - 1; y++) {
+                    for (let x = 1; x < procCanvas.width - 1; x++) {
                         const offset = (y * procCanvas.width + x) * 4;
                         const r = imgData[offset];
                         const g = imgData[offset + 1];
                         const b = imgData[offset + 2];
+                        const brightness = (r + g + b) / 3;
 
-                        const avg = (r + g + b) / 3;
+                        // Check contrast with neighboring pixels to find edges (hairline, clothing edges, shoulders)
+                        const rightOffset = (y * procCanvas.width + (x + 1)) * 4;
+                        const downOffset = ((y + 1) * procCanvas.width + x) * 4;
+                        const rightDiff = Math.abs(brightness - ((imgData[rightOffset] + imgData[rightOffset+1] + imgData[rightOffset+2]) / 3));
+                        const downDiff = Math.abs(brightness - ((imgData[downOffset] + imgData[downOffset+1] + imgData[downOffset+2]) / 3));
                         
-                        // High threshold: only render ASCII for brighter areas, cutting out background clutter
-                        if (avg > 90) {
-                            const charIndex = Math.floor(((avg - 90) / 165) * (asciiChars.length - 1));
-                            const char = asciiChars[Math.max(0, charIndex)];
+                        // If it's an edge contour and not part of a plain background wall
+                        if ((rightDiff > 18 || downDiff > 18) && brightness < 200 && brightness > 25) {
+                            const charIndex = Math.floor((brightness / 255) * (asciiChars.length - 1));
+                            const char = asciiChars[charIndex];
 
                             if (char && char !== ' ') {
-                                const drawX = (procCanvas.width - 1 - x) * cellWidth;
+                                const drawX = x * cellWidth;
                                 const drawY = y * cellHeight;
                                 ctx.fillText(char, drawX, drawY);
                             }
@@ -262,6 +272,7 @@
                 ctx.restore();
             }
             
+            // 4. Draw lyric word particles coming from your hand
             wordParticles.forEach(p => p.update());
             wordParticles = wordParticles.filter(p => p.alpha > 0);
             wordParticles.forEach(p => p.draw());
