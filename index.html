@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lyric Code Fall Animation</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #1e1e1e;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .code-overlay {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #d4d4d4;
+            background: rgba(30, 30, 30, 0.85);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            pointer-events: none;
+            border: 1px solid #333;
+        }
+
+        .code-overlay span.keyword { color: #c586c0; }
+        .code-overlay span.variable { color: #9cdcfe; }
+        .code-overlay span.string { color: #ce9178; }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="code-overlay">
+        <div><span class="keyword">let</span> <span class="variable">lyrics</span> = <span class="string">"Believe me I can fly, I'm singing in the sky"</span>;</div>
+        <div><span class="keyword">function</span> <span class="variable">fall</span>() {</div>
+        <div>&nbsp;&nbsp;particles.forEach(p => p.update());</div>
+        <div>}</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Using your chosen lyric string for the falling characters
+        const lyricString = "Believe me I can fly, I'm singing in the sky";
+        const characters = lyricString.split('');
+
+        class Particle {
+            constructor(char, x, y) {
+                this.char = char;
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = Math.random() * 2 + 1;
+                this.rotation = Math.random() * Math.PI * 2;
+                this.vRotation = (Math.random() - 0.5) * 0.05;
+                this.size = Math.floor(Math.random() * 8) + 16;
+            }
+
+            update() {
+                this.y += this.vy;
+                this.x += this.vx;
+                this.rotation += this.vRotation;
+
+                // Reset to top if it falls off screen
+                if (this.y > canvas.height + 50) {
+                    this.y = -50;
+                    this.x = Math.random() * canvas.width;
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.font = `${this.size}px 'Courier New', monospace`;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                ctx.fillText(this.char, 0, 0);
+                ctx.restore();
+            }
+        }
+
+        // Create a pool of particles using the characters from your lyrics
+        const particles = [];
+        for (let i = 0; i < 75; i++) {
+            const char = characters[Math.floor(Math.random() * characters.length)];
+            particles.push(new Particle(
+                char,
+                Math.random() * canvas.width,
+                Math.random() * canvas.height
+            ));
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
