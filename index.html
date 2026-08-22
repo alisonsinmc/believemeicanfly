@@ -20,7 +20,7 @@
             font-family: 'Courier New', Courier, monospace;
         }
 
-        #webcam {
+        #webcam, #processing-canvas {
             display: none;
         }
 
@@ -81,6 +81,7 @@
     <div id="play-prompt">🔊 Click to Play Music & Enable Camera</div>
 
     <video id="webcam" playsinline></video>
+    <canvas id="processing-canvas"></canvas>
     <canvas id="canvas"></canvas>
 
     <div class="code-overlay">
@@ -93,12 +94,16 @@
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+        const procCanvas = document.getElementById('processing-canvas');
+        const procCtx = procCanvas.getContext('2d', { willReadFrequently: true });
         const videoElement = document.getElementById('webcam');
         const audio = document.getElementById('background-music');
 
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            procCanvas.width = 90;
+            procCanvas.height = 55;
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
@@ -109,8 +114,10 @@
         let stars = [];
         let lastSpawnTime = 0;
         let isPausedForTimer = false;
+        let gestureStarted = false; // Tracks whether your hand gesture has begun
 
-        // Background falling stars
+        const asciiChars = "@#&$%*+!?., ";
+
         class Star {
             constructor() {
                 this.x = Math.random() * canvas.width;
@@ -138,7 +145,6 @@
             stars.push(new Star());
         }
 
-        // Crisp, high-contrast word particles that pop against the clean background
         class WordParticle {
             constructor(x, y, word) {
                 this.word = word;
@@ -183,6 +189,9 @@
 
         hands.onResults((results) => {
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                // Trigger that hand gesture has started
+                gestureStarted = true;
+
                 if (!audio.paused && audio.duration && audio.currentTime < audio.duration / 2) {
                     if (isPausedForTimer) return;
 
@@ -216,23 +225,63 @@
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Draw falling stars background
+            // 1. Falling stars background
             stars.forEach(star => {
                 star.update();
                 star.draw();
             });
 
-            // 2. Draw clean full-color video feed (no laggy filters)
             if (videoElement.readyState >= 2) {
+                // 2. Clear full-color video feed underneath
                 ctx.save();
                 ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
                 ctx.restore();
+
+                // 3. Lightweight ASCII overlay strictly mapped onto hair/face/body contours
+                procCtx.drawImage(videoElement, 0, 0, procCanvas.width, procCanvas.height);
+                const imgData = procCtx.getImageData(0, 0, procCanvas.width, procCanvas.height).data;
+
+                ctx.save();
+                ctx.font = '11px monospace';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+
+                const cellWidth = canvas.width / procCanvas.width;
+                const cellHeight = canvas.height / procCanvas.height;
+
+                for (let y = 1; y < procCanvas.height - 1; y++) {
+                    for (let x = 1; x < procCanvas.width - 1; x++) {
+                        const offset = (y * procCanvas.width + x) * 4;
+                        const r = imgData[offset];
+                        const g = imgData[offset + 1];
+                        const b = imgData[offset + 2];
+                        const brightness = (r + g + b) / 3;
+
+                        const rightOffset = (y * procCanvas.width + (x + 1)) * 4;
+                        const downOffset = ((y + 1) * procCanvas.width + x) * 4;
+                        const rightDiff = Math.abs(brightness - ((imgData[rightOffset] + imgData[rightOffset+1] + imgData[rightOffset+2]) / 3));
+                        const downDiff = Math.abs(brightness - ((imgData[downOffset] + imgData[downOffset+1] + imgData[downOffset+2]) / 3));
+                        
+                        if ((rightDiff > 16 || downDiff > 16) && brightness < 210 && brightness > 30) {
+                            const charIndex = Math.floor((brightness / 255) * (asciiChars.length - 1));
+                            const char = asciiChars[charIndex];
+
+                            if (char && char !== ' ') {
+                                const drawX = x * cellWidth;
+                                const drawY = y * cellHeight;
+                                ctx.fillText(char, drawX, drawY);
+                            }
+                        }
+                    }
+                }
+                ctx.restore();
             }
             
-            // 3. Update and draw crisp lyric word particles
-            wordParticles.forEach(p => p.update());
-            wordParticles = wordParticles.filter(p => p.alpha > 0);
-            wordParticles.forEach(p => p.draw());
+            // 4. Only draw lyric word particles once the hand gesture has started
+            if (gestureStarted) {
+                wordParticles.forEach(p => p.update());
+                wordParticles = wordParticles.filter(p => p.alpha > 0);
+                wordParticles.forEach(p => p.draw());
+            }
 
             requestAnimationFrame(animate);
         }
