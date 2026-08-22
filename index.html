@@ -20,7 +20,7 @@
             font-family: 'Courier New', Courier, monospace;
         }
 
-        #webcam {
+        #webcam, #processing-canvas {
             display: none;
         }
 
@@ -31,7 +31,6 @@
             position: absolute;
             top: 0;
             left: 0;
-            /* Removed scaleX(-1) so it matches your natural camera perspective */
         }
 
         .code-overlay {
@@ -82,10 +81,11 @@
     <div id="play-prompt">🔊 Click to Play Music & Enable Camera</div>
 
     <video id="webcam" playsinline></video>
+    <canvas id="processing-canvas"></canvas>
     <canvas id="canvas"></canvas>
 
     <div class="code-overlay">
-        <div><span class="keyword">let</span> <span class="variable">lyricWords</span> = [<span class="string">"Believe"</span>, <span class="string">"me"</span>, <span class="string">"I"</span>, <span class="string">"can"</span>, <span class="string">"fly"</span>];</div>
+        <div><span class="keyword">let</span> <span class="variable">lyricWords</span> = [<span class="string">"believe"</span>, <span class="string">"me"</span>, <span class="string">"i"</span>, <span class="string">"can"</span>, <span class="string">"fly"</span>];</div>
         <div><span class="keyword">function</span> <span class="variable">emitWord</span>(hand) {</div>
         <div>&nbsp;&nbsp;particles.push(<span class="keyword">new</span> WordParticle(hand.x, hand.y));</div>
         <div>}</div>
@@ -94,23 +94,29 @@
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+        const procCanvas = document.getElementById('processing-canvas');
+        const procCtx = procCanvas.getContext('2d', { willReadFrequently: true });
         const videoElement = document.getElementById('webcam');
         const audio = document.getElementById('background-music');
 
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            procCanvas.width = 120;
+            procCanvas.height = 70;
         }
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        const lyricWords = ["Believe", "me", "I", "can", "fly,", "I'm", "singing", "in", "the", "sky"];
+        // Exact strict order of the lyrics
+        const lyricWords = ["believe", "me", "i", "can", "fly,", "im", "singing", "in", "the", "sky"];
         let wordIndex = 0;
         let wordParticles = [];
         let stars = [];
         let lastSpawnTime = 0;
 
-        // Background Falling Star Class
+        const asciiChars = "@#S%?*+:, .";
+
         class Star {
             constructor() {
                 this.x = Math.random() * canvas.width;
@@ -134,11 +140,10 @@
             }
         }
 
-        for (let i = 0; i < 100; i++) {
+        for (let i = 0; i < 80; i++) {
             stars.push(new Star());
         }
 
-        // Single Word Particle Emitted from Hands
         class WordParticle {
             constructor(x, y, word) {
                 this.word = word;
@@ -185,15 +190,16 @@
                     const landmarks = results.multiHandLandmarks[0];
                     const indexFingerTip = landmarks[8];
 
-                    // Un-mirror the X coordinate so it aligns with the non-flipped camera feed
                     const handX = (1 - indexFingerTip.x) * canvas.width;
                     const handY = indexFingerTip.y * canvas.height;
 
                     const now = Date.now();
-                    if (now - lastSpawnTime > 300) { 
+                    // Emits the next word in sequence cleanly every 350ms
+                    if (now - lastSpawnTime > 350) { 
                         const currentWord = lyricWords[wordIndex];
                         wordParticles.push(new WordParticle(handX, handY, currentWord));
                         
+                        // Increment sequentially, looping back when reaching the end
                         wordIndex = (wordIndex + 1) % lyricWords.length;
                         lastSpawnTime = now;
                     }
@@ -204,21 +210,43 @@
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 1. Falling stars background
             stars.forEach(star => {
                 star.update();
                 star.draw();
             });
 
-            // 2. Webcam background (drawn normally without flip)
             if (videoElement.readyState >= 2) {
+                procCtx.drawImage(videoElement, 0, 0, procCanvas.width, procCanvas.height);
+                const imgData = procCtx.getImageData(0, 0, procCanvas.width, procCanvas.height).data;
+
                 ctx.save();
-                ctx.globalAlpha = 0.4;
-                ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+                ctx.font = '10px monospace';
+                ctx.fillStyle = 'rgba(150, 150, 200, 0.35)';
+
+                const cellWidth = canvas.width / procCanvas.width;
+                const cellHeight = canvas.height / procCanvas.height;
+
+                for (let y = 0; y < procCanvas.height; y++) {
+                    for (let x = 0; x < procCanvas.width; x++) {
+                        const offset = (y * procCanvas.width + x) * 4;
+                        const r = imgData[offset];
+                        const g = imgData[offset + 1];
+                        const b = imgData[offset + 2];
+
+                        const avg = (r + g + b) / 3;
+                        const charIndex = Math.floor((avg / 255) * (asciiChars.length - 1));
+                        const char = asciiChars[charIndex];
+
+                        if (char !== ' ') {
+                            const drawX = (procCanvas.width - 1 - x) * cellWidth;
+                            const drawY = y * cellHeight;
+                            ctx.fillText(char, drawX, drawY);
+                        }
+                    }
+                }
                 ctx.restore();
             }
             
-            // 3. Word particles
             wordParticles.forEach(p => p.update());
             wordParticles = wordParticles.filter(p => p.alpha > 0);
             wordParticles.forEach(p => p.draw());
@@ -228,7 +256,6 @@
 
         animate();
 
-        // Audio & Camera Trigger Logic
         const prompt = document.getElementById('play-prompt');
 
         prompt.addEventListener('click', async () => {
