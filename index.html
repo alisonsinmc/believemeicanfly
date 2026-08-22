@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Believe Me I Can Fly</title>
+    
+    <!-- MediaPipe Libraries for Hand Tracking -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
     <style>
         body, html {
             margin: 0;
@@ -15,10 +20,19 @@
             font-family: 'Courier New', Courier, monospace;
         }
 
+        /* Hidden video element used to capture webcam frames */
+        #webcam {
+            display: none;
+        }
+
         canvas {
             display: block;
             width: 100%;
             height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform: scaleX(-1); /* Mirror effect for natural webcam movement */
         }
 
         .code-overlay {
@@ -32,6 +46,7 @@
             font-size: 14px;
             pointer-events: none;
             border: 1px solid #333;
+            z-index: 10;
         }
 
         .code-overlay span.keyword { color: #c586c0; }
@@ -66,9 +81,12 @@
         Your browser does not support the audio element.
     </audio>
 
-    <!-- Click Prompt for Audio -->
-    <div id="play-prompt">🔊 Click to Play Music</div>
+    <div id="play-prompt">🔊 Click to Play Music & Enable Camera</div>
 
+    <!-- Hidden Video Feed -->
+    <video id="webcam" playsinline></video>
+    
+    <!-- Canvas for Webcam + Falling Lyrics -->
     <canvas id="canvas"></canvas>
 
     <div class="code-overlay">
@@ -81,6 +99,7 @@
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+        const videoElement = document.getElementById('webcam');
 
         function resizeCanvas() {
             canvas.width = window.innerWidth;
@@ -91,6 +110,9 @@
 
         const lyricString = "Believe me I can fly, I'm singing in the sky";
         const characters = lyricString.split('');
+
+        // Track hand coordinates
+        let handPositions = [];
 
         class Particle {
             constructor(char, x, y) {
@@ -105,14 +127,35 @@
             }
 
             update() {
+                // Normal downward movement & drift
                 this.y += this.vy;
                 this.x += this.vx;
                 this.rotation += this.vRotation;
 
+                // React to hand positions (push particles away)
+                handPositions.forEach(hand => {
+                    const dx = this.x - hand.x;
+                    const dy = this.y - hand.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 80) { // Interaction radius
+                        const angle = Math.atan2(dy, dx);
+                        const force = (80 - dist) / 5;
+                        this.vx += Math.cos(angle) * force * 0.2;
+                        this.vy += Math.sin(angle) * force * 0.2;
+                    }
+                });
+
+                // Dampen velocity to keep motion smooth
+                this.vx *= 0.95;
+                this.vy = Math.max(0.5, this.vy * 0.95 + 0.1);
+
+                // Reset to top if it falls off screen
                 if (this.y > canvas.height + 50) {
                     this.y = -50;
                     this.x = Math.random() * canvas.width;
                 }
+                if (this.x < 0) this.x = canvas.width;
+                if (this.x > canvas.width) this.x = 0;
             }
 
             draw() {
@@ -120,25 +163,60 @@
                 ctx.translate(this.x, this.y);
                 ctx.rotate(this.rotation);
                 ctx.font = `${this.size}px 'Courier New', monospace`;
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
                 ctx.fillText(this.char, 0, 0);
                 ctx.restore();
             }
         }
 
         const particles = [];
-        for (let i = 0; i < 75; i++) {
-            const char = characters[Math.floor(Math.random() * characters.length)];
+        for (let i = 0; i < 80; i++) {
             particles.push(new Particle(
-                char, 
+                characters[Math.floor(Math.random() * characters.length)], 
                 Math.random() * canvas.width, 
                 Math.random() * canvas.height
             ));
         }
 
+        // Setup MediaPipe Hands
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults((results) => {
+            handPositions = [];
+            if (results.multiHandLandmarks) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    // Grab index finger tip (landmark 8) or palm center for interaction
+                    const landmark = landmarks[8]; 
+                    handPositions.push({
+                        x: landmark.x * canvas.width,
+                        y: landmark.y * canvas.height
+                    });
+                }
+            }
+        });
+
+        // Animation Loop
         function animate() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw webcam feed in the background
+            if (videoElement.readyState >= 2) {
+                ctx.save();
+                ctx.globalAlpha = 0.4; // Faint webcam backdrop so text pops
+                ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+                ctx.restore();
+            }
             
+            // Update and draw lyric particles
             particles.forEach(p => {
                 p.update();
                 p.draw();
@@ -149,14 +227,28 @@
 
         animate();
 
-        // Audio trigger logic
+        // Audio & Camera Trigger Logic
         const audio = document.getElementById('background-music');
         const prompt = document.getElementById('play-prompt');
 
-        prompt.addEventListener('click', () => {
-            if (audio.paused) {
+        prompt.addEventListener('click', async () => {
+            try {
                 audio.play();
+                
+                // Start Webcam Camera Feed
+                const camera = new Camera(videoElement, {
+                    onFrame: async () => {
+                        await hands.send({ image: videoElement });
+                    },
+                    width: 1280,
+                    height: 720
+                });
+                await camera.start();
+
                 prompt.style.display = 'none';
+            } catch (err) {
+                console.error("Error starting camera or audio:", err);
+                prompt.innerText = "⚠️ Camera/Audio Blocked. Check Permissions.";
             }
         });
     </script>
